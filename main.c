@@ -7,26 +7,10 @@
 
 #include <stdio.h>
 #include <alsa/asoundlib.h>
-#include <dbus/dbus.h>
 
-int notify(DBusConnection *conn)
+int notify()
 {
-    DBusMessage *msg;
-    dbus_uint32_t serial = 0;
-
-    msg = dbus_message_new_signal("/com/ch1p/Object", "com.ch1p.avm", "valueChanged");
-    if (NULL == msg) {
-        fprintf(stderr, "DBus: Message Null\n");
-        return 1;
-    }
-
-    if (!dbus_connection_send(conn, msg, &serial)) {
-        fprintf(stderr, "DBus send: Out Of Memory!\n");
-        return 1;
-    }
-    dbus_connection_flush(conn);
-
-    dbus_message_unref(msg);
+    fprintf(stderr, "valueChanged\n");
     return 0;
 }
 
@@ -50,7 +34,7 @@ int open_ctl(const char *name, snd_ctl_t **ctlp)
     return 0;
 }
 
-int check_event(snd_ctl_t *ctl, DBusConnection *conn)
+int check_event(snd_ctl_t *ctl)
 {
     snd_ctl_event_t *event;
     unsigned int mask;
@@ -63,19 +47,19 @@ int check_event(snd_ctl_t *ctl, DBusConnection *conn)
 
     if (snd_ctl_event_get_type(event) != SND_CTL_EVENT_ELEM)
         return 0;
-    
+
     mask = snd_ctl_event_elem_get_mask(event);
     if (!(mask & SND_CTL_EVENT_MASK_VALUE))
         return 0;
 
-    notify(conn);
+    notify();
 
     return 0;
 }
 
 #define MAX_CARDS   256
 
-int monitor(const char *name, DBusConnection *conn) {
+int monitor(const char *name) {
     snd_ctl_t *ctl;
     int err = 0;
 
@@ -98,7 +82,7 @@ int monitor(const char *name, DBusConnection *conn) {
         snd_ctl_poll_descriptors_revents(ctl, &fd, 1,
                          &revents);
         if (revents & POLLIN)
-            check_event(ctl, conn);
+            check_event(ctl);
     }
 
 error:
@@ -121,29 +105,7 @@ int main(int argc, char *argv[])
     if (argc < 2)
         usage();
 
-    DBusConnection *connection;
-    DBusError err;
-
-    dbus_error_init(&err);
-    connection = dbus_bus_get(DBUS_BUS_SESSION, &err);
-
-    if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "DBus Connection Error (%s)\n", err.message);
-        dbus_error_free(&err);
-    }
-
-    if (!connection) {
-        return 1;
-    }
-
-    dbus_bus_request_name(connection, "com.ch1p.avm",
-        DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
-    if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "DBus Name Error (%s)\n", err.message);
-        dbus_error_free(&err);
-    }
-
-    monitor(argv[1], connection);
+    monitor(argv[1]);
 
     return 0;
 }
